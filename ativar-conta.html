@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ativar conta | Dashboard Lago da Pedra</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(140deg,#0b1930,#13385b);color:#f2f7ff;display:grid;place-items:center;padding:20px}.card{width:min(100%,440px);background:#152a46;border:1px solid #355270;border-radius:18px;padding:30px;box-shadow:0 20px 70px #06101d88}h1{font-size:24px;margin:8px 0}p{color:#c9d8e9;line-height:1.5}label{display:block;margin:16px 0 6px;font-weight:600}input{width:100%;padding:12px 14px;border-radius:9px;border:1px solid #63809b;background:#f8fbff;color:#13243c;font-size:16px}button{width:100%;padding:13px;border:0;border-radius:9px;background:#3bd1b0;color:#09253a;font-size:16px;font-weight:700;cursor:pointer;margin-top:20px}button:disabled{opacity:.55;cursor:not-allowed}.message{margin-top:18px;padding:12px;border-radius:8px;background:#24425f;white-space:pre-wrap;line-height:1.45}.message.error{background:#653044}.hidden{display:none}a{color:#8ee8db}.brand{color:#7fe0c9;font-weight:700;letter-spacing:.06em;font-size:13px}small{color:#aac1d6}
+</style>
+</head>
+<body>
+<main class="card">
+<div class="brand">LAGO DA PEDRA · ACESSO SEGURO</div>
+<h1>Ativar sua conta</h1>
+<p>Abra esta página pelo link individual do convite enviado ao seu e-mail. Depois, defina uma senha para sua conta.</p>
+<form id="form" class="hidden">
+<label for="senha">Nova senha</label><input id="senha" type="password" autocomplete="new-password" minlength="12" required placeholder="Mínimo de 12 caracteres">
+<label for="confirmar">Confirme a senha</label><input id="confirmar" type="password" autocomplete="new-password" minlength="12" required placeholder="Repita a senha">
+<button id="salvar" type="submit">Definir minha senha</button>
+</form>
+<div id="mensagem" class="message" role="status" aria-live="polite">Verificando seu convite...</div>
+<p><small>O acesso aos dados depende de autorização adicional do administrador.</small></p>
+</main>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+// CONFIGURAÇÃO: substitua SOMENTE os dois valores abaixo pelos dados públicos do seu projeto.
+const SUPABASE_URL = 'https://eeslpvgqaayvzuzqprmr.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_TpgEixSdDZGqs0VkXUDP8Q_QRhKql7a';
+const form = document.querySelector('#form');
+const message = document.querySelector('#mensagem');
+const senha = document.querySelector('#senha');
+const confirmar = document.querySelector('#confirmar');
+const salvar = document.querySelector('#salvar');
+function aviso(texto, erro=false){message.textContent=texto;message.classList.toggle('error',erro)}
+if(!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(SUPABASE_URL) || !SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')){
+ aviso('Esta página ainda não foi configurada pelo administrador. Não informe sua senha aqui.',true);
+}else{
+ const supabase=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,autoRefreshToken:true,persistSession:true}});
+ async function iniciar(){
+  try{
+   const params=new URLSearchParams(location.search);
+   const hash=new URLSearchParams(location.hash.replace(/^#/,''));
+   if(params.get('error')||hash.get('error')){aviso('O convite não pôde ser validado. Solicite um novo convite ao administrador.',true);return;}
+   // Suporta o fluxo de link padrão com tokens e o fluxo de código PKCE do Supabase.
+   const {data,error}=await supabase.auth.getSession();
+   if(error)throw error;
+   if(!data.session){aviso('Não há convite válido nesta página. Abra o link recebido por e-mail ou solicite um novo convite.',true);return;}
+   // Remove tokens da barra de endereços após o cliente processá-los.
+   history.replaceState(null,'',location.pathname);
+   form.classList.remove('hidden');
+   aviso('Convite reconhecido. Defina uma senha forte para continuar.');
+  }catch(e){aviso('Não foi possível validar o convite. Solicite outro link ao administrador.',true);}
+ }
+ form.addEventListener('submit',async(event)=>{
+  event.preventDefault();
+  if(senha.value!==confirmar.value){aviso('As senhas não coincidem.',true);return;}
+  if(senha.value.length<12){aviso('Use uma senha de pelo menos 12 caracteres.',true);return;}
+  salvar.disabled=true;
+  try{
+   const {error}=await supabase.auth.updateUser({password:senha.value});
+   if(error)throw error;
+   form.classList.add('hidden');senha.value='';confirmar.value='';
+   const {data:{user}}=await supabase.auth.getUser();
+   const {data:perfil,error:perfilErro}=await supabase.from('perfis').select('papel,ativo').eq('usuario_id',user.id).maybeSingle();
+   if(perfilErro||!perfil?.ativo){aviso('Senha definida com sucesso. Sua conta ainda aguarda autorização do administrador. Você não tem acesso aos dados do dashboard.');return;}
+   aviso('Senha definida com sucesso. Sua conta está ativa. Você já pode acessar a tela de login do dashboard.');
+  }catch(e){aviso('Não foi possível definir a senha: '+(e?.message||'tente novamente'),true);}
+  finally{salvar.disabled=false;}
+ });
+ iniciar();
+}
+</script>
+</body>
+</html>
